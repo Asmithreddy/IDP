@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - File Version Check</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .test-result {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .pass { color: green; font-weight: bold; }
+        .fail { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>🔍 File Version Diagnostic</h1>
+    
+    <div class="test-result">
+        <h3>Test 1: JavaScript File Version</h3>
+        <p id="test1">Loading...</p>
+    </div>
+    
+    <div class="test-result">
+        <h3>Test 2: Functions Exist</h3>
+        <p id="test2">Loading...</p>
+    </div>
+    
+    <div class="test-result">
+        <h3>Test 3: Event Listeners</h3>
+        <p id="test3">Loading...</p>
+    </div>
+    
+    <script src="script.js?v=2"></script>
+    <script>
+        // Test 1: Check if new functions exist
+        const hasTableFunction = typeof createResultsTable === 'function';
+        const hasSortFunction = typeof applySorting === 'function';
+        const hasFilterFunction = typeof applyYearFilter === 'function';
+        const hasDownloadFunction = typeof downloadCSV === 'function';
+        
+        document.getElementById('test1').innerHTML = 
+            hasTableFunction && hasSortFunction && hasFilterFunction && hasDownloadFunction
+            ? '<span class="pass">✓ PASS - New JavaScript loaded</span>'
+            : '<span class="fail">✗ FAIL - Old JavaScript still cached</span><br>' +
+              'createResultsTable: ' + hasTableFunction + '<br>' +
+              'applySorting: ' + hasSortFunction + '<br>' +
+              'applyYearFilter: ' + hasFilterFunction + '<br>' +
+              'downloadCSV: ' + hasDownloadFunction;
+        
+        // Test 2: Check variables
+        document.getElementById('test2').innerHTML = 
+            '<span class="pass">✓ currentCyclones: ' + typeof currentCyclones + '</span><br>' +
+            '<span class="pass">✓ filteredCyclones: ' + typeof filteredCyclones + '</span><br>' +
+            '<span class="pass">✓ currentSearchData: ' + typeof currentSearchData + '</span>';
+        
+        // Test 3: Check if page has the elements
+        setTimeout(() => {
+            const hasSortSelect = document.getElementById('sort-select') !== null;
+            const hasYearFrom = document.getElementById('year-from') !== null;
+            const hasDownloadBtn = document.getElementById('download-csv-btn') !== null;
+            
+            document.getElementById('test3').innerHTML = 
+                hasSortSelect && hasYearFrom && hasDownloadBtn
+                ? '<span class="pass">✓ PASS - All filter elements exist</span>'
+                : '<span class="fail">✗ FAIL - Filter elements missing</span><br>' +
+                  'sort-select: ' + hasSortSelect + '<br>' +
+                  'year-from: ' + hasYearFrom + '<br>' +
+                  'download-csv-btn: ' + hasDownloadBtn;
+        }, 100);
+    </script>
+    
+    <hr>
+    <h2>Actions:</h2>
+    <ul>
+        <li>If any test shows FAIL, clear browser cache completely</li>
+        <li>If all tests show PASS, go back to main page and try again</li>
+    </ul>
+    
+    <a href="index.html?v=2" style="display: block; margin-top: 20px; font-size: 18px;">→ Back to Cyclone Tracker</a>
+</body>
+</html>

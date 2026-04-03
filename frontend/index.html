@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyclone Tracker - Historical Cyclone Path Viewer</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css?v=4">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🌍 Natural Disaster Tracker</h1>
+            <p>Click anywhere on the map to find historical cyclones and tsunamis</p>
+            
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="cyclones">
+                    🌀 Cyclones
+                </button>
+                <button class="tab-btn" data-tab="tsunamis">
+                    🌊 Tsunamis
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Map Container -->
+            <div class="map-container">
+                <div id="map"></div>
+                
+                <!-- Map Controls -->
+                <div class="map-controls">
+                    <div class="active-mode">
+                        <strong>Mode:</strong> <span id="active-mode-label">Cyclones</span>
+                    </div>
+                    <label>
+                        Search Radius: 
+                        <select id="distance-select">
+                            <!-- Cyclone options -->
+                            <option value="50000">50 km</option>
+                            <option value="100000" selected>100 km</option>
+                            <option value="200000">200 km</option>
+                            <option value="500000">500 km</option>
+                        </select>
+                    </label>
+                    <button id="clear-btn" class="btn-clear">Clear All</button>
+                </div>
+                
+                <!-- Loading Indicator -->
+                <div id="loading" class="loading hidden">
+                    <div class="spinner"></div>
+                    <p>Searching for cyclones...</p>
+                </div>
+            </div>
+
+            <!-- Results Panel -->
+            <div class="results-panel">
+                <div id="results-header" class="results-header">
+                    <h2>Results</h2>
+                    <p class="subtitle">Click on the map to start searching</p>
+                </div>
+                
+                <!-- Filters and Controls -->
+                <div id="filters-section" class="filters-section hidden">
+                    <div class="filter-group">
+                        <label>Sort By:</label>
+                        <select id="sort-select">
+                            <option value="distance">Distance (Near to Far)</option>
+                            <option value="windspeed">Wind Speed (High to Low)</option>
+                            <option value="year">Year (Recent to Old)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>Year Range:</label>
+                        <div class="year-filter">
+                            <input type="number" id="year-from" placeholder="From" min="1842" max="2026">
+                            <span>to</span>
+                            <input type="number" id="year-to" placeholder="To" min="1842" max="2026">
+                            <button id="apply-filter-btn" class="btn-apply">Apply</button>
+                        </div>
+                    </div>
+                    
+                    <div class="action-buttons">
+                        <button id="download-csv-btn" class="btn-download">📥 Download CSV</button>
+                    </div>
+                </div>
+                
+                <div id="results-content" class="results-content">
+                    <div class="welcome-message">
+                        <p>👈 Click anywhere on the map to find cyclones</p>
+                        <p class="info-text">
+                            The system will search for all historical cyclones that passed 
+                            within your selected radius of the clicked point.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Data Source: IBTrACS (International Best Track Archive for Climate Stewardship)</p>
+        </footer>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Custom JS -->
+    <script src="script.js?v=4"></script>
+</body>
+</html>

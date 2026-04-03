@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyclone & Tsunami Tracker</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="tsunami.css">   <!-- ← ADD -->
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🌍 Natural Disaster Tracker</h1>
+            <p id="map-instruction">🌀 Click anywhere on the map to find historical cyclones that passed through that location</p>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Map Container -->
+            <div class="map-container">
+                <div id="map"></div>
+                
+                <!-- Map Controls -->
+                <div class="map-controls">
+                    <label>
+                        Search Radius: 
+                        <select id="distance-select">
+                            <option value="50000">50 km</option>
+                            <option value="100000" selected>100 km</option>
+                            <option value="200000">200 km</option>
+                            <option value="500000">500 km</option>
+                        </select>
+                    </label>
+                    <button id="clear-btn" class="btn-clear">Clear All</button>
+                </div>
+                
+                <!-- Loading Indicator -->
+                <div id="loading" class="loading hidden">
+                    <div class="spinner"></div>
+                    <p>Searching...</p>
+                </div>
+            </div>
+
+            <!-- Results Panel -->
+            <div class="results-panel">
+
+                <!-- ← TAB SWITCHER -->
+                <div class="tab-switcher">
+                    <button class="tab-btn active" id="tab-cyclone" onclick="switchToCyclone()">🌀 Cyclones</button>
+                    <button class="tab-btn" id="tab-tsunami" onclick="switchToTsunami()">🌊 Tsunamis</button>
+                </div>
+
+                <!-- CYCLONE PANEL (existing, untouched) -->
+                <div id="cyclone-panel" style="display:flex; flex-direction:column; height:100%; overflow:hidden;">
+                    <div id="results-header" class="results-header">
+                        <h2>Results</h2>
+                        <p class="subtitle">Click on the map to start searching</p>
+                    </div>
+                    
+                    <div id="results-content" class="results-content">
+                        <div class="welcome-message">
+                            <p>👈 Click anywhere on the map to find cyclones</p>
+                            <p class="info-text">
+                                The system will search for all historical cyclones that passed 
+                                within your selected radius of the clicked point.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ← TSUNAMI PANEL (new) -->
+                <div id="tsunami-panel">
+
+                    <!-- Search radius -->
+                    <div class="tsunami-controls">
+                        <label>Search Radius:</label>
+                        <select id="tsunami-distance-select">
+                            <option value="200000">200 km</option>
+                            <option value="500000" selected>500 km</option>
+                            <option value="1000000">1,000 km</option>
+                            <option value="2000000">2,000 km</option>
+                        </select>
+                    </div>
+
+                    <!-- Stats summary -->
+                    <div id="tsunami-stats-summary"></div>
+
+                    <!-- Results header -->
+                    <div class="tsunami-results-header">
+                        <h3>🌊 Tsunami Events</h3>
+                        <span class="count-badge" id="tsunami-count">0</span>
+                    </div>
+
+                    <!-- Results list -->
+                    <div id="tsunami-results">
+                        <div class="no-results">
+                            <p>🌊 Click anywhere on the map to find tsunamis</p>
+                            <p>The system will search for all historical tsunamis within your selected radius</p>
+                        </div>
+                    </div>
+
+                    <!-- Legend -->
+                    <div class="tsunami-legend">
+                        <div class="tsunami-legend-title">Wave Height</div>
+                        <div class="tsunami-legend-items">
+                            <div class="legend-item">
+                                <div class="legend-dot" style="background:#4ade80"></div><span>&lt;2m</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-dot" style="background:#facc15"></div><span>2–5m</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-dot" style="background:#f97316"></div><span>5–10m</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-dot" style="background:#dc2626"></div><span>10–30m</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-dot" style="background:#7f1d1d"></div><span>&gt;30m</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-dot" style="background:#94a3b8"></div><span>Unknown</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Data: IBTrACS (Cyclones) | NOAA NGDC (Tsunamis)</p>
+        </footer>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- tsunami.js MUST come before script.js -->
+    <script src="tsunami.js"></script>
+    <script src="script.js"></script>
+
+</body>
+</html>
