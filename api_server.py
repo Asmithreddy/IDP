@@ -44,6 +44,7 @@ class CycloneResult(BaseModel):
     max_wind_speed: Optional[int]
     min_pressure: Optional[int]
     duration_hours: Optional[float]
+    min_dist_to_land: Optional[int] = None   # km; None means no data
 
 class TrackGeometry(BaseModel):
     storm_id: str
@@ -57,6 +58,7 @@ class ClickResponse(BaseModel):
     distance_km: int
     cyclones_found: int
     cyclones: List[CycloneResult]
+    nearest_cyclone: Optional[dict] = None   # populated only when cyclones_found == 0
 
 # ===============================================
 # DATABASE FUNCTIONS
@@ -173,16 +175,33 @@ async def get_cyclones_near_point(
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
-        # Execute query
+
+        # 1. Find cyclones within the requested radius
         cursor.execute(
             "SELECT * FROM find_cyclones_near_point(%s, %s, %s)",
             (lat, lon, distance)
         )
-        
         results = cursor.fetchall()
-        
-        # Convert to response format
+
+        # 2. Batch-fetch minimum distance-to-land for every matched storm
+        storm_ids = [row['storm_id'] for row in results]
+        dist2land_map = {}
+        if storm_ids:
+            cursor.execute(
+                """
+                SELECT sid,
+                       MIN(CASE WHEN dist2land IS NOT NULL AND dist2land >= 0
+                                THEN dist2land END) AS min_d2l
+                FROM cyclone_points
+                WHERE sid = ANY(%s)
+                GROUP BY sid
+                """,
+                (storm_ids,)
+            )
+            for r in cursor.fetchall():
+                dist2land_map[r['sid']] = r['min_d2l']
+
+        # 3. Build response objects
         cyclones = []
         for row in results:
             try:
@@ -197,26 +216,60 @@ async def get_cyclones_near_point(
                     num_observations=int(row['num_observations']) if row['num_observations'] else 0,
                     max_wind_speed=int(row['max_wind_speed']) if row['max_wind_speed'] else None,
                     min_pressure=int(row['min_pressure']) if row['min_pressure'] else None,
-                    duration_hours=float(row['duration_hours']) if row['duration_hours'] else None
+                    duration_hours=float(row['duration_hours']) if row['duration_hours'] else None,
+                    min_dist_to_land=(int(dist2land_map[row['storm_id']])
+                                      if row['storm_id'] in dist2land_map
+                                         and dist2land_map[row['storm_id']] is not None
+                                      else None)
                 ))
             except Exception as row_error:
                 print(f"Error processing row: {row_error}, Row data: {row}")
-                continue  # Skip this row and continue with others
-        
+                continue
+
+        # 4. If nothing found, locate the single nearest cyclone on the globe
+        nearest_cyclone = None
+        if not cyclones:
+            cursor.execute(
+                """
+                SELECT ct.sid,
+                       COALESCE(ct.name, 'UNNAMED') AS name,
+                       ct.season,
+                       CAST(ST_Distance(
+                           ct.path::geography,
+                           ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography
+                       ) / 1000.0 AS DOUBLE PRECISION) AS distance_km
+                FROM cyclone_tracks ct
+                WHERE ct.path IS NOT NULL
+                ORDER BY ct.path::geography <->
+                         ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography
+                LIMIT 1
+                """,
+                (lon, lat, lon, lat)
+            )
+            nearest = cursor.fetchone()
+            if nearest:
+                nearest_cyclone = {
+                    'storm_id':     nearest['sid'],
+                    'cyclone_name': nearest['name'],
+                    'year':         nearest['season'],
+                    'distance_km':  round(float(nearest['distance_km']), 2)
+                }
+
         cursor.close()
-        
+
         return ClickResponse(
             clicked_lat=lat,
             clicked_lon=lon,
             distance_km=distance // 1000,
             cyclones_found=len(cyclones),
-            cyclones=cyclones
+            cyclones=cyclones,
+            nearest_cyclone=nearest_cyclone
         )
-        
+
     except Exception as e:
         import traceback
         error_detail = f"Query failed: {str(e)}\n{traceback.format_exc()}"
-        print(f"ERROR in get_cyclones_near_point: {error_detail}")  # Log to console
+        print(f"ERROR in get_cyclones_near_point: {error_detail}")
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
     finally:
         if conn:
@@ -276,7 +329,7 @@ async def get_cyclone_track_points(storm_id: str):
 
         cursor.execute(
             """
-            SELECT lat, lon, iso_time, wmo_wind, wmo_pres, nature
+            SELECT lat, lon, iso_time, wmo_wind, wmo_pres, nature, dist2land
             FROM cyclone_points
             WHERE sid = %s
             ORDER BY iso_time
@@ -290,13 +343,15 @@ async def get_cyclone_track_points(storm_id: str):
         points = []
         for row in rows:
             if row["lat"] is not None and row["lon"] is not None:
+                d2l = row["dist2land"]
                 points.append({
                     "lat": float(row["lat"]),
                     "lon": float(row["lon"]),
                     "iso_time": row["iso_time"].isoformat() if row["iso_time"] else None,
                     "wind_speed": int(row["wmo_wind"]) if row["wmo_wind"] else None,
                     "pressure": int(row["wmo_pres"]) if row["wmo_pres"] else None,
-                    "nature": row["nature"]
+                    "nature": row["nature"],
+                    "dist2land": int(d2l) if d2l is not None and d2l >= 0 else None
                 })
 
         return {

@@ -551,6 +551,53 @@ body {
 }
 
 /* ===============================================
+   NEAREST CYCLONE CARD (shown when 0 results)
+   =============================================== */
+
+.nearest-cyclone-card {
+    margin-top: 14px;
+    background: linear-gradient(135deg, #667eea15, #764ba215);
+    border: 1px solid #667eea55;
+    border-radius: 10px;
+    padding: 12px 16px;
+    text-align: center;
+}
+
+.nearest-label {
+    font-size: 11px;
+    color: #888;
+    margin: 0 0 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.nearest-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #4a4a6a;
+    margin: 0 0 2px;
+}
+
+.nearest-year {
+    font-weight: 400;
+    color: #888;
+    font-size: 13px;
+}
+
+.nearest-dist {
+    font-size: 18px;
+    font-weight: 700;
+    color: #667eea;
+    margin: 4px 0 2px;
+}
+
+.nearest-hint {
+    font-size: 11px;
+    color: #aaa;
+    margin: 0;
+}
+
+/* ===============================================
    WIND SPEED LEGEND
    =============================================== */
 

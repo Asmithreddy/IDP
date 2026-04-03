@@ -339,6 +339,7 @@ function displayCycloneTrack(track, cyclone, trackPoints) {
                     <p><strong>Wind Speed:</strong> ${windStr}</p>
                     <p><strong>Category:</strong> <span style="color:${dotColor};font-weight:bold">${catLabel}</span></p>
                     <p><strong>Pressure:</strong> ${pt.pressure != null ? pt.pressure + ' mb' : 'N/A'}</p>
+                    <p><strong>Dist to Land:</strong> ${pt.dist2land != null ? pt.dist2land + ' km' : 'N/A'}</p>
                     <p><strong>Nature:</strong> ${natureStr}</p>
                     <p><strong>Obs #:</strong> ${idx + 1} of ${pts.length}</p>
                 </div>
@@ -348,11 +349,12 @@ function displayCycloneTrack(track, cyclone, trackPoints) {
         });
 
         cycloneLayers.push({
-            stormId:  track.storm_id,
-            layer:    null,
-            segments: segmentLayers,
-            dots:     dotLayers,
-            color:    fallbackColor
+            stormId:         track.storm_id,
+            layer:           null,
+            segments:        segmentLayers,
+            dots:            dotLayers,
+            color:           fallbackColor,
+            trackPointsData: trackPoints   // raw data kept for CSV export
         });
 
     } else {
@@ -364,11 +366,12 @@ function displayCycloneTrack(track, cyclone, trackPoints) {
         polyline.bindPopup(trackPopupHtml);
 
         cycloneLayers.push({
-            stormId:  track.storm_id,
-            layer:    polyline,
-            segments: [],
-            dots:     [],
-            color:    fallbackColor
+            stormId:         track.storm_id,
+            layer:           polyline,
+            segments:        [],
+            dots:            [],
+            color:           fallbackColor,
+            trackPointsData: null
         });
     }
 }
@@ -467,10 +470,22 @@ function updateResultsPanel(data) {
     resultsContent.innerHTML = '';
     
     if (filteredCyclones.length === 0) {
+        let nearestHtml = '';
+        if (data && data.nearest_cyclone) {
+            const nc = data.nearest_cyclone;
+            nearestHtml = `
+                <div class="nearest-cyclone-card">
+                    <p class="nearest-label">Nearest cyclone on record:</p>
+                    <p class="nearest-name">${nc.cyclone_name} <span class="nearest-year">(${nc.year})</span></p>
+                    <p class="nearest-dist">${nc.distance_km.toFixed(1)} km away</p>
+                    <p class="nearest-hint">Try a larger search radius to include it.</p>
+                </div>`;
+        }
         resultsContent.innerHTML = `
             <div class="no-results">
-                <p>😕 No cyclones found</p>
+                <p>😕 No cyclones found within ${data ? data.distance_km : ''} km</p>
                 <p class="info-text">Try adjusting filters or increasing the search radius</p>
+                ${nearestHtml}
             </div>
         `;
         return;
@@ -729,8 +744,9 @@ function createResultsTable(cyclones) {
                 <th>Name</th>
                 <th>Year</th>
                 <th>Distance (km)</th>
-                <th>Max Wind Speed (kts)</th>
+                <th>Max Wind (kts)</th>
                 <th>Min Pressure (mb)</th>
+                <th>Min Dist to Land (km)</th>
                 <th>Start Date</th>
                 <th>End Date</th>
             </tr>
@@ -781,12 +797,17 @@ function createTableRow(cyclone, index) {
         ? cyclone.min_pressure 
         : 'N/A';
     
+    const distToLandValue = (cyclone.min_dist_to_land != null && cyclone.min_dist_to_land >= 0)
+        ? cyclone.min_dist_to_land
+        : 'N/A';
+
     row.innerHTML = `
         <td class="cyclone-name-cell">${cyclone.cyclone_name}</td>
         <td class="year-cell number">${cyclone.year}</td>
         <td class="number">${cyclone.distance_km.toFixed(2)}</td>
         <td class="wind-cell number ${windClass} ${windValue === 'N/A' ? 'na-value' : ''}">${windValue}</td>
         <td class="number ${pressureValue === 'N/A' ? 'na-value' : ''}">${pressureValue}</td>
+        <td class="number ${distToLandValue === 'N/A' ? 'na-value' : ''}">${distToLandValue}</td>
         <td>${startDate}</td>
         <td>${endDate}</td>
     `;
@@ -1038,10 +1059,7 @@ function applyYearFilter() {
     console.log(`Filtering years: ${yearFrom || 'any'} to ${yearTo || 'any'}`);
     
     if (activeMode === 'cyclones') {
-        // Start with all cyclones
         filteredCyclones = [...currentCyclones];
-        
-        // Apply year filter
         if (yearFrom || yearTo) {
             filteredCyclones = filteredCyclones.filter(cyclone => {
                 if (yearFrom && cyclone.year < yearFrom) return false;
@@ -1049,11 +1067,10 @@ function applyYearFilter() {
                 return true;
             });
         }
+        // Sync map: only show tracks that are in the filtered set
+        syncMapToFilter();
     } else {
-        // Start with all tsunamis
         filteredTsunamis = [...currentTsunamis];
-        
-        // Apply year filter
         if (yearFrom || yearTo) {
             filteredTsunamis = filteredTsunamis.filter(tsunami => {
                 if (!tsunami.year) return false;
@@ -1069,9 +1086,43 @@ function applyYearFilter() {
     applySorting(sortBy);
 }
 
+// Show/hide map layers so only tracks in filteredCyclones are visible
+function syncMapToFilter() {
+    if (activeMode !== 'cyclones') return;
+    const visibleIds = new Set(filteredCyclones.map(c => c.storm_id));
+
+    cycloneLayers.forEach(item => {
+        const show = visibleIds.has(item.stormId);
+        const lineOp = show ? 0.85 : 0;
+        const dotOp  = show ? 0.95 : 0;
+
+        if (item.layer) {
+            item.layer.setStyle({ opacity: show ? 0.7 : 0 });
+        }
+        if (item.segments) {
+            item.segments.forEach(s => s.setStyle({ opacity: lineOp }));
+        }
+        if (item.dots) {
+            item.dots.forEach(d => d.setStyle({ opacity: dotOp, fillOpacity: dotOp }));
+        }
+    });
+}
+
 // ===============================================
 // CSV DOWNLOAD
 // ===============================================
+
+// Encode a cyclone's track points as a WKT LineString for the CSV cell
+function trackToWKT(stormId) {
+    const item = cycloneLayers.find(i => i.stormId === stormId);
+    if (!item || !item.trackPointsData || !item.trackPointsData.points || item.trackPointsData.points.length === 0) {
+        return 'N/A';
+    }
+    const coords = item.trackPointsData.points
+        .map(pt => `${pt.lon.toFixed(4)} ${pt.lat.toFixed(4)}`)
+        .join(', ');
+    return `"LINESTRING(${coords})"`;
+}
 
 function downloadCSV() {
     if (activeMode === 'cyclones') {
@@ -1079,21 +1130,41 @@ function downloadCSV() {
             alert('No results to download');
             return;
         }
-        
+
         console.log(`Downloading CSV with ${filteredCyclones.length} cyclones`);
-        
-        const headers = ['Name', 'Year', 'Distance_km', 'Max_Wind_Speed_kts', 'Min_Pressure_mb', 'Start_Date', 'End_Date'];
-        const rows = [headers];
-        
+
+        const sd = currentSearchData;
+        const rows = [];
+
+        // ── Metadata header block ──
+        rows.push(['# Search Location', `Lat: ${sd.clicked_lat.toFixed(6)}`, `Lon: ${sd.clicked_lon.toFixed(6)}`]);
+        rows.push(['# Search Radius (km)', sd.distance_km]);
+        rows.push(['# Cyclones in results', filteredCyclones.length]);
+        rows.push([]);   // blank separator
+
+        // ── Column headers ──
+        rows.push([
+            'Name', 'Year', 'Basin',
+            'Distance_to_Search_km',
+            'Max_Wind_Speed_kts', 'Min_Pressure_mb',
+            'Min_Dist_to_Land_km',
+            'Start_Date', 'End_Date', 'Duration_hrs',
+            'Track_WKT'
+        ]);
+
         filteredCyclones.forEach(cyclone => {
             rows.push([
                 `"${cyclone.cyclone_name.replace(/"/g, '""')}"`,
                 cyclone.year,
+                `"${(cyclone.basin || 'N/A').replace(/"/g, '""')}"`,
                 cyclone.distance_km.toFixed(2),
                 cyclone.max_wind_speed || 'N/A',
-                cyclone.min_pressure || 'N/A',
+                cyclone.min_pressure   || 'N/A',
+                cyclone.min_dist_to_land != null ? cyclone.min_dist_to_land : 'N/A',
                 new Date(cyclone.start_date).toISOString().split('T')[0],
-                new Date(cyclone.end_date).toISOString().split('T')[0]
+                new Date(cyclone.end_date).toISOString().split('T')[0],
+                cyclone.duration_hours ? cyclone.duration_hours.toFixed(1) : 'N/A',
+                trackToWKT(cyclone.storm_id)
             ]);
         });
         
