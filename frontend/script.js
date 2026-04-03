@@ -41,7 +41,26 @@ function initMap() {
     
     // Add click event
     map.on('click', onMapClick);
-    
+
+    // Wind speed intensity legend (bottom-left)
+    const legend = L.control({ position: 'bottomleft' });
+    legend.onAdd = function () {
+        const div = L.DomUtil.create('div', 'wind-legend');
+        div.innerHTML = `
+            <div class="wind-legend-title">Wind Speed Intensity</div>
+            <div class="wind-legend-item"><span class="wind-legend-swatch" style="background:#444444"></span> N/A</div>
+            <div class="wind-legend-item"><span class="wind-legend-swatch" style="background:#5dade2"></span> TD &lt;34 kts</div>
+            <div class="wind-legend-item"><span class="wind-legend-swatch" style="background:#27ae60"></span> TS 34–63 kts</div>
+            <div class="wind-legend-item"><span class="wind-legend-swatch" style="background:#f9ca24"></span> Cat 1 64–82 kts</div>
+            <div class="wind-legend-item"><span class="wind-legend-swatch" style="background:#f0932b"></span> Cat 2 83–95 kts</div>
+            <div class="wind-legend-item"><span class="wind-legend-swatch" style="background:#e55039"></span> Cat 3 96–112 kts</div>
+            <div class="wind-legend-item"><span class="wind-legend-swatch" style="background:#c0392b"></span> Cat 4 113–136 kts</div>
+            <div class="wind-legend-item"><span class="wind-legend-swatch" style="background:#8e44ad"></span> Cat 5 ≥137 kts</div>
+        `;
+        return div;
+    };
+    legend.addTo(map);
+
     console.log('Map initialized');
 }
 
@@ -197,9 +216,12 @@ async function loadCycloneTracks(cyclones) {
     
     for (const cyclone of cyclones) {
         try {
-            const track = await fetchCycloneTrack(cyclone.storm_id);
+            const [track, trackPoints] = await Promise.all([
+                fetchCycloneTrack(cyclone.storm_id),
+                fetchCycloneTrackPoints(cyclone.storm_id)
+            ]);
             if (track) {
-                displayCycloneTrack(track, cyclone);
+                displayCycloneTrack(track, cyclone, trackPoints);
             }
         } catch (error) {
             console.error(`Error loading track for ${cyclone.storm_id}:`, error);
@@ -225,26 +247,36 @@ async function fetchCycloneTrack(stormId) {
 }
 
 // ===============================================
+// FETCH CYCLONE TRACK POINTS (individual observations)
+// ===============================================
+
+async function fetchCycloneTrackPoints(stormId) {
+    const url = `${CONFIG.API_BASE_URL}/track-points/${stormId}`;
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+        console.warn(`Could not fetch track points for ${stormId}`);
+        return null;
+    }
+    
+    return await response.json();
+}
+
+// ===============================================
 // DISPLAY CYCLONE TRACK
 // ===============================================
 
-function displayCycloneTrack(track, cyclone) {
-    // Convert GeoJSON coordinates to Leaflet format
-    const coordinates = track.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+function displayCycloneTrack(track, cyclone, trackPoints) {
+    const fallbackColor = getColorForCyclone(track.storm_id);
     
-    // Generate color based on storm_id (for variety)
-    const color = getColorForCyclone(track.storm_id);
-    
-    // Create polyline
-    const polyline = L.polyline(coordinates, {
-        color: color,
-        weight: 3,
-        opacity: 0.7,
-        className: `cyclone-track-${track.storm_id}`
-    }).addTo(map);
-    
-    // Add popup
-    polyline.bindPopup(`
+    const natureLabels = {
+        'TS': 'Tropical Storm', 'HU': 'Hurricane', 'TD': 'Tropical Depression',
+        'ET': 'Extratropical', 'SD': 'Sub-tropical Depr.', 'SS': 'Sub-tropical Storm',
+        'NR': 'Not Reported', 'MX': 'Mixed'
+    };
+
+    const trackPopupHtml = `
         <div class="popup-content">
             <h3>${track.cyclone_name}</h3>
             <p><strong>Year:</strong> ${track.year}</p>
@@ -253,14 +285,104 @@ function displayCycloneTrack(track, cyclone) {
             <p><strong>Max Wind:</strong> ${cyclone.max_wind_speed || 'N/A'} knots</p>
             <p><strong>Duration:</strong> ${cyclone.duration_hours ? cyclone.duration_hours.toFixed(1) + ' hours' : 'N/A'}</p>
         </div>
-    `);
-    
-    // Store layer
-    cycloneLayers.push({
-        stormId: track.storm_id,
-        layer: polyline,
-        color: color
-    });
+    `;
+
+    const segmentLayers = [];
+    const dotLayers = [];
+
+    if (trackPoints && trackPoints.points && trackPoints.points.length > 0) {
+        const pts = trackPoints.points;
+
+        // Draw one colored segment between each pair of consecutive points.
+        // Each segment takes the wind-speed color of its starting point.
+        for (let i = 0; i < pts.length - 1; i++) {
+            const segColor = getWindSpeedColor(pts[i].wind_speed);
+            const seg = L.polyline(
+                [[pts[i].lat, pts[i].lon], [pts[i + 1].lat, pts[i + 1].lon]],
+                { color: segColor, weight: 3.5, opacity: 0.85 }
+            ).addTo(map);
+            seg.bindPopup(trackPopupHtml);
+            segmentLayers.push(seg);
+        }
+
+        // Draw a dot at each recorded observation.
+        pts.forEach((pt, idx) => {
+            const isFirst = idx === 0;
+            const isLast  = idx === pts.length - 1;
+            const dotColor = getWindSpeedColor(pt.wind_speed);
+
+            const dot = L.circleMarker([pt.lat, pt.lon], {
+                radius:      (isFirst || isLast) ? 6 : 4,
+                fillColor:   dotColor,
+                color:       'white',
+                weight:      (isFirst || isLast) ? 2 : 1.5,
+                opacity:     1,
+                fillOpacity: 0.95
+            }).addTo(map);
+
+            let timeStr = 'N/A';
+            if (pt.iso_time) {
+                timeStr = new Date(pt.iso_time).toUTCString().replace(' GMT', ' UTC');
+            }
+            const natureStr = pt.nature ? (natureLabels[pt.nature] || pt.nature) : 'N/A';
+            const label = isFirst ? ' (Start)' : isLast ? ' (End)' : '';
+            const windStr = pt.wind_speed != null && pt.wind_speed > 0
+                ? `${pt.wind_speed} kts`
+                : 'N/A';
+            const catLabel = getCategoryLabel(pt.wind_speed);
+
+            dot.bindPopup(`
+                <div class="popup-content">
+                    <h3>${track.cyclone_name}${label}</h3>
+                    <p><strong>Time (UTC):</strong> ${timeStr}</p>
+                    <p><strong>Position:</strong> ${pt.lat.toFixed(2)}°, ${pt.lon.toFixed(2)}°</p>
+                    <p><strong>Wind Speed:</strong> ${windStr}</p>
+                    <p><strong>Category:</strong> <span style="color:${dotColor};font-weight:bold">${catLabel}</span></p>
+                    <p><strong>Pressure:</strong> ${pt.pressure != null ? pt.pressure + ' mb' : 'N/A'}</p>
+                    <p><strong>Nature:</strong> ${natureStr}</p>
+                    <p><strong>Obs #:</strong> ${idx + 1} of ${pts.length}</p>
+                </div>
+            `);
+
+            dotLayers.push(dot);
+        });
+
+        cycloneLayers.push({
+            stormId:  track.storm_id,
+            layer:    null,
+            segments: segmentLayers,
+            dots:     dotLayers,
+            color:    fallbackColor
+        });
+
+    } else {
+        // Fallback – no point data, draw a plain colored polyline
+        const coordinates = track.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+        const polyline = L.polyline(coordinates, {
+            color: fallbackColor, weight: 3, opacity: 0.7
+        }).addTo(map);
+        polyline.bindPopup(trackPopupHtml);
+
+        cycloneLayers.push({
+            stormId:  track.storm_id,
+            layer:    polyline,
+            segments: [],
+            dots:     [],
+            color:    fallbackColor
+        });
+    }
+}
+
+// Returns a short human-readable category label for a wind speed value
+function getCategoryLabel(windSpeed) {
+    if (windSpeed == null || windSpeed <= 0) return 'N/A';
+    if (windSpeed < 34)  return 'Tropical Depression';
+    if (windSpeed < 64)  return 'Tropical Storm';
+    if (windSpeed < 83)  return 'Hurricane Cat 1';
+    if (windSpeed < 96)  return 'Hurricane Cat 2';
+    if (windSpeed < 113) return 'Hurricane Cat 3';
+    if (windSpeed < 137) return 'Hurricane Cat 4';
+    return 'Hurricane Cat 5';
 }
 
 // ===============================================
@@ -780,29 +902,37 @@ function createTsunamiTableRow(tsunami, index) {
 // ===============================================
 
 function highlightCycloneTrack(stormId) {
-    // Reset all tracks to normal
+    // Dim all tracks
     cycloneLayers.forEach(item => {
-        item.layer.setStyle({
-            weight: 3,
-            opacity: 0.7
-        });
+        if (item.layer)    item.layer.setStyle({ weight: 3, opacity: 0.25 });
+        if (item.segments) item.segments.forEach(s => s.setStyle({ weight: 3, opacity: 0.2 }));
+        if (item.dots)     item.dots.forEach(d => d.setStyle({ opacity: 0.2, fillOpacity: 0.2 }));
     });
-    
-    // Highlight selected track
-    const selectedTrack = cycloneLayers.find(item => item.stormId === stormId);
-    if (selectedTrack) {
-        selectedTrack.layer.setStyle({
-            weight: 5,
-            opacity: 1
-        });
-        selectedTrack.layer.bringToFront();
-        
-        // Fit bounds to track with animation
-        map.fitBounds(selectedTrack.layer.getBounds(), { 
-            padding: [50, 50],
-            animate: true,
-            duration: 0.5
-        });
+
+    // Fully highlight the selected track
+    const sel = cycloneLayers.find(item => item.stormId === stormId);
+    if (!sel) return;
+
+    if (sel.layer) {
+        sel.layer.setStyle({ weight: 5, opacity: 1 });
+        sel.layer.bringToFront();
+    }
+    if (sel.segments) {
+        sel.segments.forEach(s => { s.setStyle({ weight: 5, opacity: 1 }); s.bringToFront(); });
+    }
+    if (sel.dots) {
+        sel.dots.forEach(d => { d.setStyle({ opacity: 1, fillOpacity: 0.95 }); d.bringToFront(); });
+    }
+
+    // Fit map to the selected track
+    let bounds;
+    if (sel.dots && sel.dots.length > 0) {
+        bounds = L.latLngBounds(sel.dots.map(d => d.getLatLng()));
+    } else if (sel.layer) {
+        bounds = sel.layer.getBounds();
+    }
+    if (bounds) {
+        map.fitBounds(bounds, { padding: [50, 50], animate: true, duration: 0.5 });
     }
 }
 
@@ -1026,6 +1156,18 @@ function downloadCSV() {
 // UTILITY FUNCTIONS
 // ===============================================
 
+// Returns a color based on wind speed using standard meteorological categories
+function getWindSpeedColor(windSpeed) {
+    if (windSpeed == null || windSpeed <= 0) return '#444444'; // N/A  - dark gray
+    if (windSpeed < 34)  return '#5dade2'; // TD   <34 kts  - blue
+    if (windSpeed < 64)  return '#27ae60'; // TS   34-63    - green
+    if (windSpeed < 83)  return '#f9ca24'; // Cat1 64-82    - yellow
+    if (windSpeed < 96)  return '#f0932b'; // Cat2 83-95    - amber
+    if (windSpeed < 113) return '#e55039'; // Cat3 96-112   - red-orange
+    if (windSpeed < 137) return '#c0392b'; // Cat4 113-136  - crimson
+    return '#8e44ad';                      // Cat5 137+     - purple
+}
+
 function getColorForCyclone(stormId) {
     // Generate consistent color based on storm ID
     const colors = [
@@ -1073,9 +1215,11 @@ function clearMap() {
         searchCircle = null;
     }
     
-    // Remove all cyclone tracks
+    // Remove all cyclone tracks, segments, and observation dots
     cycloneLayers.forEach(item => {
-        map.removeLayer(item.layer);
+        if (item.layer)    map.removeLayer(item.layer);
+        if (item.segments) item.segments.forEach(s => map.removeLayer(s));
+        if (item.dots)     item.dots.forEach(d => map.removeLayer(d));
     });
     cycloneLayers = [];
     

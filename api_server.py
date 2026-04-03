@@ -263,6 +263,55 @@ async def get_cyclone_track(storm_id: str):
         if conn:
             conn.close()
 
+@app.get("/api/track-points/{storm_id}")
+async def get_cyclone_track_points(storm_id: str):
+    """
+    Get individual recorded observation points for a specific cyclone track,
+    including timestamps, wind speed, and pressure at each recorded position.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        cursor.execute(
+            """
+            SELECT lat, lon, iso_time, wmo_wind, wmo_pres, nature
+            FROM cyclone_points
+            WHERE sid = %s
+            ORDER BY iso_time
+            """,
+            (storm_id,)
+        )
+
+        rows = cursor.fetchall()
+        cursor.close()
+
+        points = []
+        for row in rows:
+            if row["lat"] is not None and row["lon"] is not None:
+                points.append({
+                    "lat": float(row["lat"]),
+                    "lon": float(row["lon"]),
+                    "iso_time": row["iso_time"].isoformat() if row["iso_time"] else None,
+                    "wind_speed": int(row["wmo_wind"]) if row["wmo_wind"] else None,
+                    "pressure": int(row["wmo_pres"]) if row["wmo_pres"] else None,
+                    "nature": row["nature"]
+                })
+
+        return {
+            "storm_id": storm_id,
+            "count": len(points),
+            "points": points
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
 @app.get("/api/stats")
 async def get_statistics():
     """Get database statistics"""
