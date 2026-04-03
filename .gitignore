@@ -2,3 +2,5 @@ idp/
 __pycache__/
 *.pyc
 .env
+ibtracs.ALL.list.v04r01.csv
+tsu/tsunami_events.tsv
