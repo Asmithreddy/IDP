@@ -16,7 +16,7 @@ import sys
 # CONFIGURATION
 # ===============================================
 DB_CONFIG = {
-    'dbname': 'cyclone_tracker',
+    'dbname': 'hazard_tracker',
     'user': 'postgres',
     'password': '1234',
     'host': 'localhost',
