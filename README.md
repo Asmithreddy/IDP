@@ -254,13 +254,16 @@ Then open http://localhost:8080 in your browser.
 **psql: command not found**  
 On Windows, add the PostgreSQL `bin` folder to your system PATH (e.g. `C:\Program Files\PostgreSQL\14\bin`).
 
+**If you are getting password authentication error **
+On Windows some times with host as localhost in DB_CONFIG in code files we get the error, try changing it to 127.0.0.1
+
 **PostGIS extension error when running setup_database.sql**  
 PostGIS was not installed correctly. On Windows, re-run Stack Builder and install the PostGIS bundle. On Linux: `sudo apt install postgis postgresql-14-postgis-3`.
 
-**import_data.py fails with connection error**  
+**import_cyclone_data.py fails with connection error**  
 Check that PostgreSQL is running and that the username/password in `DB_CONFIG` matches your installation.
 
-**import_data.py fails with "column not found" or similar**  
+**import_cyclone_data.py fails with "column not found" or similar**  
 Make sure the CSV file is the correct one (`ibtracs.ALL.list.v04r01.csv`) and that you placed it in the project root folder, not inside `frontend/`.
 
 **API server starts but the frontend shows no results**  
