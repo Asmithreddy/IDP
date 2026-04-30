@@ -84,7 +84,7 @@ This creates a folder named idp containing the environment.
 #### ▶️ Windows (Command Prompt / PowerShell)
 
 ```bash
-venv\Scripts\activate
+idp\Scripts\activate
 ```
 
 #### ▶️ macOS / Linux
