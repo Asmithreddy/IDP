@@ -172,7 +172,7 @@ DB_CONFIG = {
 Make sure `ibtracs.ALL.list.v04r01.csv` is in the project folder, then run:
 
 ```bash
-python import_data.py
+python import_cyclone_data.py
 ```
 
 This reads the CSV, cleans the data, inserts all observations into `cyclone_points`, and builds the `cyclone_tracks` table with LineString geometries.
