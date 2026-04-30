@@ -15,7 +15,7 @@ from datetime import datetime
 # ===============================================
 # IMPORTANT: Update these with your PostgreSQL credentials
 DB_CONFIG = {
-    'dbname': 'cyclone_tracker',
+    'dbname': 'hazard_tracker',
     'user': 'postgres',           # Change this to your PostgreSQL username
     'password': '1234',  # Change this to your PostgreSQL password
     'host': 'localhost',
