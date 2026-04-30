@@ -62,7 +62,7 @@ You can also download the dataset given in the repo (Preferable), but for custom
 2. Leave all filters blank (to download everything) or set min year and click **Search**
 3. Click **Download TSV** to export the results
 4. You will get a file named something like `tsunamis-2026-XX-XX_XX-XX-XX.tsv`
-5. Place this file anywhere on your machine and note the full path — you will need it in Step 5b
+5. Place this file anywhere on your machine and note the full path — you will need it in Step 7
 
 ---
 
