@@ -23,7 +23,7 @@ DB_CONFIG = {
     'port': '5432'
 }
 
-TSV_FILE = r'C:\Users\abhin\idp\Code\Code\tsunamis-2026-03-05_22-04-25_+0530.tsv'
+TSV_FILE = # r'C:\Users\abhin\idp\Code\Code\tsunamis-2026-03-05_22-04-25_+0530.tsv' # it should be the path of the tsunami dataset file
 
 # ===============================================
 # HELPERS
