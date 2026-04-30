@@ -86,12 +86,73 @@ You should see several `CREATE TABLE`, `CREATE INDEX`, and `CREATE FUNCTION` lin
 
 ---
 
-## Step 4 — Install Python dependencies
+## Step 4 — Install Python dependencies by enabling virtual environment
 
-From the project folder:
+# 🐍 Python Virtual Environment Setup
+
+## ⚙️ Prerequisites
+
+- Python 3.7 or higher
+
+Check your Python version:
+
+```bash
+python --version
+```
+
+---
+
+### 1️⃣ Create a Virtual Environment
+
+Run this in your project directory:
+
+```bash
+python -m venv idp
+```
+This creates a folder named idp containing the environment.
+
+---
+
+### 2️⃣ Activate the Virtual Environment
+
+#### ▶️ Windows (Command Prompt / PowerShell)
+
+```bash
+venv\Scripts\activate
+```
+
+#### ▶️ macOS / Linux
+
+```bash
+source venv/bin/activate
+```
+
+---
+
+### 3️⃣ Verify Activation
+
+After activation, your terminal should look like:
+
+```bash
+(venv) your-project-path>
+```
+
+---
+
+### 4️⃣ Install Dependencies
+
+`requirements.txt` file is given in repo with all the required libraries to run the application.
 
 ```bash
 pip install -r requirements.txt
+```
+
+---
+
+### 5️⃣ For Deactivate the Virtual Environment (when the work is completed)
+
+```bash
+deactivate
 ```
 
 ---
