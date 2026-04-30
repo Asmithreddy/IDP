@@ -23,6 +23,8 @@ let filteredCyclones = [];
 let filteredTsunamis = [];
 let currentSearchData = null;
 let windSpeedChart = null;
+let windAnalysisChart = null;
+let currentWindAnalysis = null;
 let activeMode = 'cyclones'; // 'cyclones' or 'tsunamis'
 
 // ===============================================
@@ -149,6 +151,9 @@ async function searchCyclones(lat, lon, distance) {
     document.getElementById('year-from').value = '';
     document.getElementById('year-to').value = '';
     
+    // Fire wind analysis in parallel with track loading
+    const windAnalysisPromise = fetchWindAnalysis(lat, lon, distance);
+
     // Update results panel
     updateResultsPanel(data);
     
@@ -156,6 +161,10 @@ async function searchCyclones(lat, lon, distance) {
     if (data.cyclones.length > 0) {
         await loadCycloneTracks(data.cyclones);
     }
+
+    // Inject wind analysis once it resolves
+    currentWindAnalysis = await windAnalysisPromise;
+    injectWindAnalysisSection(currentWindAnalysis);
 }
 
 // ===============================================
@@ -261,6 +270,22 @@ async function fetchCycloneTrackPoints(stormId) {
     }
     
     return await response.json();
+}
+
+// ===============================================
+// FETCH WIND ANALYSIS (GEV / return levels)
+// ===============================================
+
+async function fetchWindAnalysis(lat, lon, distance) {
+    try {
+        const url = `${CONFIG.API_BASE_URL}/wind-analysis?lat=${lat}&lon=${lon}&distance=${distance}`;
+        const response = await fetch(url);
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (e) {
+        console.warn('Wind analysis fetch failed:', e);
+        return null;
+    }
 }
 
 // ===============================================
@@ -1227,6 +1252,185 @@ function downloadCSV() {
 // UTILITY FUNCTIONS
 // ===============================================
 
+// ===============================================
+// WIND RISK ANALYSIS SECTION
+// ===============================================
+
+function injectWindAnalysisSection(data) {
+    // Find the anchor point — insert just before the category bar chart
+    const resultsContent = document.getElementById('results-content');
+    if (!resultsContent) return;
+
+    // Remove any existing wind analysis section
+    const existing = document.getElementById('wind-analysis-section');
+    if (existing) existing.remove();
+    if (windAnalysisChart) { windAnalysisChart.destroy(); windAnalysisChart = null; }
+
+    const section = document.createElement('div');
+    section.id = 'wind-analysis-section';
+    section.className = 'wind-analysis-section';
+
+    if (!data || data.insufficient_data) {
+        section.innerHTML = `
+            <div class="wind-analysis-header">
+                <span class="wind-analysis-title">⚠ Wind Risk Analysis</span>
+            </div>
+            <p class="wind-analysis-msg">${data ? data.message : 'Could not load wind analysis.'}</p>
+        `;
+        // Insert before chart-container if it exists, else append
+        const chartContainer = resultsContent.querySelector('.chart-container');
+        if (chartContainer) resultsContent.insertBefore(section, chartContainer);
+        else resultsContent.appendChild(section);
+        return;
+    }
+
+    const rl = data.return_levels;
+    const wCatLabel = w => {
+        if (w < 34)  return 'TD';
+        if (w < 64)  return 'TS';
+        if (w < 83)  return 'Cat 1';
+        if (w < 96)  return 'Cat 2';
+        if (w < 113) return 'Cat 3';
+        if (w < 137) return 'Cat 4';
+        return 'Cat 5';
+    };
+
+    section.innerHTML = `
+        <div class="wind-analysis-header">
+            <span class="wind-analysis-title">🌀 Wind Risk Analysis — ${data.gev_fallback ? 'Gumbel Fit (fallback)' : 'GEV Fit'}</span>
+            <span class="wind-analysis-meta">${data.sample_count} storms (with wind data) · ${data.storm_count} total storms · radius ${data.distance_km} km</span>
+        </div>
+        <div class="wind-analysis-stats">
+            <div class="wa-stat">
+                <div class="wa-stat-label">Mean Wind</div>
+                <div class="wa-stat-value">${data.wind_mean}<span class="wa-stat-unit"> kts</span></div>
+                <div class="wa-stat-sub">${wCatLabel(data.wind_mean)}</div>
+            </div>
+            <div class="wa-stat">
+                <div class="wa-stat-label">Median Wind</div>
+                <div class="wa-stat-value">${data.wind_median}<span class="wa-stat-unit"> kts</span></div>
+                <div class="wa-stat-sub">${wCatLabel(data.wind_median)}</div>
+            </div>
+            <div class="wa-stat wa-stat-highlight50">
+                <div class="wa-stat-label">50-yr Level</div>
+                <div class="wa-stat-value">${rl.w50}<span class="wa-stat-unit"> kts</span></div>
+                <div class="wa-stat-sub">${wCatLabel(rl.w50)}</div>
+            </div>
+            <div class="wa-stat wa-stat-highlight100">
+                <div class="wa-stat-label">100-yr Level</div>
+                <div class="wa-stat-value">${rl.w100}<span class="wa-stat-unit"> kts</span></div>
+                <div class="wa-stat-sub">${wCatLabel(rl.w100)}</div>
+            </div>
+        </div>
+        <div class="wa-gev-params">
+            ${data.gev_fallback ? 'Gumbel params (GEV shape fixed=0)' : 'GEV params'} — shape: <b>${data.gev_params.shape}</b> · loc: <b>${data.gev_params.loc}</b> · scale: <b>${data.gev_params.scale}</b>
+        </div>
+        <div class="wa-chart-wrapper">
+            <canvas id="windAnalysisChart"></canvas>
+        </div>
+        <p class="wa-note">* Each storm contributes one value — the maximum wind speed recorded within the search radius. The GEV distribution is fitted to these per-storm maxima. Return levels: ppf(1−1/50) for 50-yr and ppf(1−1/100) for 100-yr.</p>
+    `;
+
+    const chartContainer = resultsContent.querySelector('.chart-container');
+    if (chartContainer) resultsContent.insertBefore(section, chartContainer);
+    else resultsContent.appendChild(section);
+
+    // Render the chart after the DOM is ready
+    setTimeout(() => renderWindAnalysisChart(data), 50);
+}
+
+function renderWindAnalysisChart(data) {
+    const canvas = document.getElementById('windAnalysisChart');
+    if (!canvas) return;
+    if (windAnalysisChart) { windAnalysisChart.destroy(); windAnalysisChart = null; }
+
+    const hist = data.histogram;
+    const pdf  = data.fitted_pdf;
+    const rl   = data.return_levels;
+
+    windAnalysisChart = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: hist.bins,
+            datasets: [
+                {
+                    type: 'bar',
+                    label: 'Per-storm max wind speed',
+                    data: hist.counts,
+                    backgroundColor: 'rgba(102, 126, 234, 0.55)',
+                    borderColor:     'rgba(102, 126, 234, 0.9)',
+                    borderWidth: 1,
+                    order: 2
+                },
+                {
+                    type: 'line',
+                    label: 'GEV fitted PDF',
+                    data: pdf.x.map((x, i) => ({ x, y: pdf.y[i] })),
+                    borderColor: '#e55039',
+                    borderWidth: 2.5,
+                    pointRadius: 0,
+                    tension: 0.4,
+                    fill: false,
+                    order: 1,
+                    parsing: false
+                },
+                {
+                    type: 'line',
+                    label: `50-yr: ${rl.w50} kts`,
+                    data: [{ x: rl.w50, y: 0 }, { x: rl.w50, y: Math.max(...hist.counts) * 1.1 }],
+                    borderColor: '#f0932b',
+                    borderWidth: 2,
+                    borderDash: [6, 4],
+                    pointRadius: 0,
+                    fill: false,
+                    order: 0,
+                    parsing: false
+                },
+                {
+                    type: 'line',
+                    label: `100-yr: ${rl.w100} kts`,
+                    data: [{ x: rl.w100, y: 0 }, { x: rl.w100, y: Math.max(...hist.counts) * 1.1 }],
+                    borderColor: '#8e44ad',
+                    borderWidth: 2,
+                    borderDash: [6, 4],
+                    pointRadius: 0,
+                    fill: false,
+                    order: 0,
+                    parsing: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { position: 'top', labels: { font: { size: 11 } } },
+                tooltip: {
+                    callbacks: {
+                        title: ctx => `Wind: ${ctx[0].label} kts`,
+                        label: ctx => `${ctx.dataset.label}: ${Number(ctx.raw.y ?? ctx.raw).toFixed(1)}`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'linear',
+                    title: { display: true, text: 'Wind Speed (kts)' },
+                    min: 0,
+                    // Clamp to data range so bars stay visible even if return-level
+                    // lines extend far right (chart clips lines but preserves bars).
+                    max: Math.max(...hist.bins) * 1.4
+                },
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: 'Number of Storms / Scaled density' }
+                }
+            }
+        }
+    });
+}
+
 // Returns a color based on wind speed using standard meteorological categories
 function getWindSpeedColor(windSpeed) {
     if (windSpeed == null || windSpeed <= 0) return '#444444'; // N/A  - dark gray
@@ -1307,11 +1511,16 @@ function clearMap() {
     filteredTsunamis = [];
     currentSearchData = null;
     
-    // Destroy chart if exists
+    // Destroy charts if exist
     if (windSpeedChart) {
         windSpeedChart.destroy();
         windSpeedChart = null;
     }
+    if (windAnalysisChart) {
+        windAnalysisChart.destroy();
+        windAnalysisChart = null;
+    }
+    currentWindAnalysis = null;
     
     // Hide filters
     document.getElementById('filters-section').classList.add('hidden');

@@ -551,6 +551,122 @@ body {
 }
 
 /* ===============================================
+   WIND RISK ANALYSIS SECTION
+   =============================================== */
+
+.wind-analysis-section {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border-radius: 12px;
+    padding: 14px 16px 12px;
+    margin: 12px 0;
+    color: #e0e0f0;
+}
+
+.wind-analysis-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+    padding-bottom: 8px;
+}
+
+.wind-analysis-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #a8b4ff;
+    letter-spacing: 0.3px;
+}
+
+.wind-analysis-meta {
+    font-size: 11px;
+    color: #8888aa;
+}
+
+.wind-analysis-msg {
+    font-size: 12px;
+    color: #aaa;
+    padding: 6px 0;
+}
+
+.wind-analysis-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.wa-stat {
+    background: rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 8px 10px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+.wa-stat-highlight50 {
+    border-color: rgba(240, 147, 43, 0.5);
+    background: rgba(240, 147, 43, 0.1);
+}
+
+.wa-stat-highlight100 {
+    border-color: rgba(142, 68, 173, 0.5);
+    background: rgba(142, 68, 173, 0.1);
+}
+
+.wa-stat-label {
+    font-size: 10px;
+    color: #8888aa;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+}
+
+.wa-stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #e8eaff;
+    line-height: 1;
+}
+
+.wa-stat-unit {
+    font-size: 11px;
+    font-weight: 400;
+    color: #8888aa;
+}
+
+.wa-stat-sub {
+    font-size: 10px;
+    color: #aaa;
+    margin-top: 3px;
+}
+
+.wa-gev-params {
+    font-size: 10.5px;
+    color: #666688;
+    margin-bottom: 8px;
+    font-family: monospace;
+    background: rgba(0,0,0,0.2);
+    border-radius: 5px;
+    padding: 5px 8px;
+}
+
+.wa-chart-wrapper {
+    position: relative;
+    height: 220px;
+    width: 100%;
+}
+
+.wa-note {
+    font-size: 10px;
+    color: #555577;
+    margin-top: 8px;
+    line-height: 1.5;
+}
+
+/* ===============================================
    NEAREST CYCLONE CARD (shown when 0 results)
    =============================================== */
 

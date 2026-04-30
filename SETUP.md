@@ -69,7 +69,7 @@ This file is about 200 MB and contains ~700,000 storm observations.
 Open a terminal (or Command Prompt on Windows) and run:
 
 ```bash
-psql -U postgres -c "CREATE DATABASE cyclone_tracker;"
+psql -U postgres -c "CREATE DATABASE hazard_tracker;"
 ```
 
 If prompted for a password, enter the password you set during PostgreSQL installation.
@@ -77,7 +77,7 @@ If prompted for a password, enter the password you set during PostgreSQL install
 Then load the schema and all functions in one command:
 
 ```bash
-psql -U postgres -d cyclone_tracker -f setup_database.sql
+psql -U postgres -d hazard_tracker -f setup_database.sql
 ```
 
 You should see several `CREATE TABLE`, `CREATE INDEX`, and `CREATE FUNCTION` lines printed with no errors. If PostGIS is not installed correctly, this step will fail — go back to Step 1.
@@ -106,7 +106,7 @@ The block looks like this in each file:
 
 ```python
 DB_CONFIG = {
-    'dbname': 'cyclone_tracker',
+    'dbname': 'hazard_tracker',
     'user': 'postgres',       # your PostgreSQL username
     'password': 'your_password_here',
     'host': 'localhost',

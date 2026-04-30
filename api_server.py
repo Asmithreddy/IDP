@@ -13,6 +13,8 @@ import json
 import uvicorn
 import sys
 import os
+import numpy as np
+from scipy.stats import genextreme
 
 # Add tsu folder to path to import tsunami router
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'tsu'))
@@ -21,7 +23,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'tsu'))
 # DATABASE CONFIGURATION
 # ===============================================
 DB_CONFIG = {
-    'dbname': 'cyclone_tracker',
+    'dbname': 'hazard_tracker',
     'user': 'postgres',           # Change this to your PostgreSQL username
     'password': '1234',  # Change this to your PostgreSQL password
     'host': 'localhost',
@@ -367,6 +369,158 @@ async def get_cyclone_track_points(storm_id: str):
             conn.close()
 
 
+@app.get("/api/wind-analysis")
+async def get_wind_analysis(
+    lat: float = Query(..., ge=-90, le=90, description="Latitude of the site"),
+    lon: float = Query(..., ge=-180, le=180, description="Longitude of the site"),
+    distance: int = Query(500000, ge=10000, le=2000000, description="Radius in metres")
+):
+    """
+    For a given location and radius:
+      1. Collects every wmo_wind observation from cyclone_points within the radius.
+      2. Fits a Generalised Extreme Value (GEV) distribution to the sample.
+      3. Returns high-quantile wind speeds (labelled 50-yr / 100-yr), sample stats,
+         histogram bins/counts, and the fitted PDF curve — ready for Chart.js.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Step 1 — use the indexed cyclone_tracks table to get candidate storm IDs
+        cursor.execute(
+            """
+            SELECT sid
+            FROM cyclone_tracks
+            WHERE path IS NOT NULL
+              AND ST_DWithin(
+                  path::geography,
+                  ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
+                  %s
+              )
+            """,
+            (lon, lat, distance)
+        )
+        storm_ids = [r['sid'] for r in cursor.fetchall()]
+
+        if not storm_ids:
+            return {
+                "sample_count": 0, "storm_count": 0,
+                "insufficient_data": True,
+                "message": "No storms pass within this radius — try a larger search radius."
+            }
+
+        # Step 2 — for each storm, take the maximum wind speed from observations
+        #           whose position falls within the radius (per-storm block maxima).
+        #           Upper cap of 250 kts excludes fill/sentinel values in IBTrACS.
+        cursor.execute(
+            """
+            SELECT sid, MAX(wmo_wind) AS max_wind
+            FROM cyclone_points
+            WHERE sid = ANY(%s)
+              AND wmo_wind IS NOT NULL
+              AND wmo_wind > 0
+              AND wmo_wind <= 250
+              AND ST_DWithin(
+                  ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography,
+                  ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
+                  %s
+              )
+            GROUP BY sid
+            """,
+            (storm_ids, lon, lat, distance)
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+
+        if len(rows) < 5:
+            return {
+                "sample_count": len(rows), "storm_count": len(storm_ids),
+                "insufficient_data": True,
+                "message": f"Only {len(rows)} storms have wind data inside the radius — need ≥5 for a reliable GEV fit."
+            }
+
+        winds = np.array([float(r['max_wind']) for r in rows])
+
+        # GEV fit  (shape c, location loc, scale scale)
+        c, loc, scale = genextreme.fit(winds)
+
+        # High-quantile return levels
+        # ppf(1 - 1/T) gives the T-year return level when data are annual maxima.
+        # Here we use the same convention as the IBTrACS notebook (ppf 0.98 / 0.99).
+        w50  = float(genextreme.ppf(0.98, c, loc=loc, scale=scale))
+        w100 = float(genextreme.ppf(0.99, c, loc=loc, scale=scale))
+
+        # Sanity check: MLE can produce a large positive shape (Fréchet) with heavy-tailed
+        # samples, causing return levels to blow up astronomically.  When return levels are
+        # non-finite, negative, or more than 5× the observed maximum, fall back to a Gumbel
+        # fit (shape fixed at 0) which is stable and commonly used for wind extremes.
+        max_obs = float(winds.max())
+        gev_fallback = False
+
+        def _is_bad(v):
+            return (not np.isfinite(v)) or v < 0 or v > max_obs * 5
+
+        if _is_bad(w50) or _is_bad(w100):
+            gev_fallback = True
+            c, loc, scale = genextreme.fit(winds, f0=0)   # Gumbel (shape=0) fallback
+            w50  = float(genextreme.ppf(0.98, c, loc=loc, scale=scale))
+            w100 = float(genextreme.ppf(0.99, c, loc=loc, scale=scale))
+            # If still bad, fall back to empirical quantiles
+            if _is_bad(w50) or _is_bad(w100):
+                w50  = float(np.percentile(winds, 98))
+                w100 = float(np.percentile(winds, 99))
+
+        # Histogram (25 equal-width bins)
+        hist_counts, bin_edges = np.histogram(winds, bins=25)
+        bin_centers = ((bin_edges[:-1] + bin_edges[1:]) / 2)
+
+        # Fitted PDF scaled to match histogram counts  (density × bin_width × n)
+        bin_width = float(bin_edges[1] - bin_edges[0])
+        x_pdf = np.linspace(max(0.0, float(winds.min()) - bin_width),
+                            float(winds.max()) * 1.15, 300)
+        y_pdf_density = genextreme.pdf(x_pdf, c, loc=loc, scale=scale)
+        y_pdf_scaled  = y_pdf_density * bin_width * len(winds)
+
+        return {
+            "sample_count":  int(len(winds)),   # storms with wind data inside radius
+            "storm_count":   len(storm_ids),     # total storms passing through radius
+            "wind_mean":     round(float(winds.mean()), 1),
+            "wind_std":      round(float(winds.std()),  1),
+            "wind_min":      round(float(winds.min()),  1),
+            "wind_max":      round(float(winds.max()),  1),
+            "wind_median":   round(float(np.median(winds)), 1),
+            "gev_params": {
+                "shape": round(float(c),     4),
+                "loc":   round(float(loc),   4),
+                "scale": round(float(scale), 4)
+            },
+            "return_levels": {
+                "w50":  round(w50,  1),
+                "w100": round(w100, 1)
+            },
+            "histogram": {
+                "bins":   [round(float(b), 1) for b in bin_centers],
+                "counts": hist_counts.tolist()
+            },
+            "fitted_pdf": {
+                "x": [round(float(v), 1) for v in x_pdf],
+                "y": [round(float(v), 2) for v in y_pdf_scaled]
+            },
+            "distance_km":       distance // 1000,
+            "insufficient_data": False,
+            "gev_fallback":      gev_fallback
+        }
+
+    except Exception as e:
+        import traceback
+        print(f"ERROR in wind_analysis: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Wind analysis failed: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
 @app.get("/api/stats")
 async def get_statistics():
     """Get database statistics"""
@@ -424,7 +578,7 @@ async def get_statistics():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("CYCLONE TRACKER API SERVER")
+    print("HAZARD TRACKER API SERVER")
     print("=" * 60)
     print("\nStarting server...")
     print("  - API URL: http://localhost:8000")
