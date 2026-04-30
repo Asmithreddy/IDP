@@ -56,8 +56,10 @@ This file is about 200 MB and contains ~700,000 storm observations.
 
 ### 2b. NOAA Tsunami dataset
 
-1. Go to https://www.ngdc.noaa.gov/hazel/hazard-search/search-tsunami-events
-2. Leave all filters blank (to download everything) and click **Search**
+You can also download the dataset given in the repo (Preferable), but for customizable dataset follow below:
+
+1. Go to https://www.ngdc.noaa.gov/hazel/view/hazards/tsunami/event-search
+2. Leave all filters blank (to download everything) or set min year and click **Search**
 3. Click **Download TSV** to export the results
 4. You will get a file named something like `tsunamis-2026-XX-XX_XX-XX-XX.tsv`
 5. Place this file anywhere on your machine and note the full path — you will need it in Step 5b
