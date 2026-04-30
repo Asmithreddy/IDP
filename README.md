@@ -88,20 +88,6 @@ You should see several `CREATE TABLE`, `CREATE INDEX`, and `CREATE FUNCTION` lin
 
 ## Step 4 — Install Python dependencies by enabling virtual environment
 
-# 🐍 Python Virtual Environment Setup
-
-## ⚙️ Prerequisites
-
-- Python 3.7 or higher
-
-Check your Python version:
-
-```bash
-python --version
-```
-
----
-
 ### 1️⃣ Create a Virtual Environment
 
 Run this in your project directory:
