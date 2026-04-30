@@ -273,6 +273,7 @@ Try a larger search radius (200 km or 500 km). Some regions have sparse storm re
 
 ```
 Code/
+├── idp       — virtual enviroment folder
 ├── setup_database.sql       — run once to create all tables and functions
 ├── import_data.py           — imports IBTrACS cyclone data into the database
 ├── import_tsunami_data.py   — imports NOAA tsunami data into the database
