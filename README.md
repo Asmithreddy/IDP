@@ -66,27 +66,7 @@ You can also download the dataset given in the repo (Preferable), but for custom
 
 ---
 
-## Step 3 — Create the database
-
-Open a terminal (or Command Prompt on Windows) and run:
-
-```bash
-psql -U postgres -c "CREATE DATABASE hazard_tracker;"
-```
-
-If prompted for a password, enter the password you set during PostgreSQL installation.
-
-Then load the schema and all functions in one command:
-
-```bash
-psql -U postgres -d hazard_tracker -f setup_database.sql
-```
-
-You should see several `CREATE TABLE`, `CREATE INDEX`, and `CREATE FUNCTION` lines printed with no errors. If PostGIS is not installed correctly, this step will fail — go back to Step 1.
-
----
-
-## Step 4 — Install Python dependencies by enabling virtual environment
+## Step 3 — Install Python dependencies by enabling virtual environment
 
 ### 1️⃣ Create a Virtual Environment
 
@@ -142,6 +122,28 @@ deactivate
 ```
 
 ---
+
+
+## Step 4 — Create the database
+
+Open a terminal (or Command Prompt on Windows) and run:
+
+```bash
+psql -U postgres -c "CREATE DATABASE hazard_tracker;"
+```
+
+If prompted for a password, enter the password you set during PostgreSQL installation.
+
+Then load the schema and all functions in one command:
+
+```bash
+psql -U postgres -d hazard_tracker -f setup_database.sql
+```
+
+You should see several `CREATE TABLE`, `CREATE INDEX`, and `CREATE FUNCTION` lines printed with no errors. If PostGIS is not installed correctly, this step will fail — go back to Step 1.
+
+---
+
 
 ## Step 5 — Update database credentials in the Python files
 
