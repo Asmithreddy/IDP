@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'tsu'))
 # DATABASE CONFIGURATION
 # ===============================================
 DB_CONFIG = {
-    'dbname': 'cyclone_tracker',
+    'dbname': 'hazard_tracker',
     'user': 'postgres',           # Change this to your PostgreSQL username
     'password': '1234',  # Change this to your PostgreSQL password
     'host': 'localhost',
@@ -424,7 +424,7 @@ async def get_statistics():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("CYCLONE TRACKER API SERVER")
+    print("HAZARD TRACKER API SERVER")
     print("=" * 60)
     print("\nStarting server...")
     print("  - API URL: http://localhost:8000")
